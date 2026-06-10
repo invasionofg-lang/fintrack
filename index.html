@@ -92,8 +92,42 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .btn-google img{width:20px;height:20px}
 .ls-note{font-size:10px;color:rgba(255,255,255,.65);margin-top:18px;max-width:280px;line-height:1.5;
   animation:fadeUp .8s .7s ease both}
+/* LOGIN TRANSITION */
 @keyframes logoIn{from{opacity:0;transform:scale(.6) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+
+@keyframes splashExpand{
+  0%  {transform:scale(1);opacity:1}
+  60% {transform:scale(28);opacity:1}
+  100%{transform:scale(40);opacity:0}
+}
+@keyframes splashFadeOut{
+  0%  {opacity:1;visibility:visible}
+  80% {opacity:1}
+  100%{opacity:0;visibility:hidden}
+}
+@keyframes appReveal{
+  0%  {opacity:0;transform:scale(.96)}
+  100%{opacity:1;transform:scale(1)}
+}
+#ls.logging-in .ls-logo{
+  animation: splashExpand .7s cubic-bezier(.4,0,.2,1) .15s both;
+  transform-origin: center center;
+}
+#ls.logging-in{
+  animation: splashFadeOut .85s cubic-bezier(.4,0,.2,1) .1s both;
+  pointer-events:none;
+}
+#ls.logging-in .lcard,
+#ls.logging-in .ls-tagline,
+#ls.logging-in .ls-note{
+  animation: fadeUp .2s ease both;
+  opacity:0;
+}
+.app-reveal{
+  animation: appReveal .5s cubic-bezier(.34,1.2,.64,1) .6s both;
+}
+
 
 /* HEADER */
 .hdr{background:linear-gradient(135deg,#1a9950 0%,#27AE60 55%,#52D68A 100%);
@@ -400,8 +434,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mbk{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);backdrop-filter:blur(6px);
   z-index:300;align-items:flex-end;justify-content:center}
 .mbk.op{display:flex}
-.modal{background:var(--card);border-radius:var(--r) var(--r) 0 0;padding:20px 17px 28px;
-  width:100%;max-width:680px;max-height:90vh;overflow-y:auto;animation:sum .3s ease}
+.modal{background:var(--card);border-radius:var(--r) var(--r) 0 0;padding:20px 17px 16px;
+  padding-bottom:max(16px, env(safe-area-inset-bottom));
+  width:100%;max-width:680px;max-height:85vh;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;animation:sum .3s ease}
 .mhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .mhead h3{font-size:16px;font-weight:800}
 .bclose{background:var(--bg);border:none;width:30px;height:30px;border-radius:50%;font-size:16px;
@@ -1066,7 +1102,7 @@ footer{max-width:680px;margin:20px auto 0;padding:0 14px 16px;
 
 <!-- MODAL PERFIS -->
 <div class="mbk" id="mbk-perfis">
-  <div class="modal">
+  <div class="modal" style="max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch">
     <div class="mhead">
       <h3>👥 Perfis</h3>
       <button class="bclose" onclick="document.getElementById('mbk-perfis').classList.remove('op')">✕</button>
@@ -1074,23 +1110,24 @@ footer{max-width:680px;margin:20px auto 0;padding:0 14px 16px;
     <p style="font-size:12px;color:var(--muted);margin-bottom:14px">
       Cada perfil tem suas próprias contas, saldo e histórico — tudo separado.</p>
     <div id="perfis-lista" style="margin-bottom:14px"></div>
-    <div style="border-top:1px solid var(--border);padding-top:14px">
+    <div style="border-top:1px solid var(--border);padding-top:12px">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Novo perfil</div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
         <input type="text" id="perfil-novo-nome" placeholder="ex: Pai, Mãe, Mari..."
           style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--rs);
-          font-family:var(--font);font-size:16px;font-weight:500;outline:none">
+          font-family:var(--font);font-size:16px;font-weight:500;outline:none"
+          onkeydown="if(event.key==='Enter')criarPerfil()">
         <button onclick="criarPerfil()" style="padding:10px 16px;background:var(--g1);color:#fff;
-          border:none;border-radius:var(--rs);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">
+          border:none;border-radius:var(--rs);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">
           + Criar
         </button>
       </div>
+      <button onclick="confirmLogout()" style="width:100%;padding:10px;background:none;
+        border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);
+        font-size:12px;font-weight:600;color:var(--muted);cursor:pointer">
+        🚪 Sair da conta Google
+      </button>
     </div>
-    <button onclick="confirmLogout()" style="width:100%;margin-top:14px;padding:10px;background:none;
-      border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);
-      font-size:12px;font-weight:600;color:var(--muted);cursor:pointer">
-      🚪 Sair da conta Google
-    </button>
   </div>
 </div>
 
@@ -1164,15 +1201,31 @@ document.addEventListener('fb-ready',()=>{
   window._fb.onAuth(async user=>{
     if(user){
       _uid=user.uid;
-      document.getElementById('ls').style.display='none';
       const ph=document.getElementById('user-photo');
       if(user.photoURL) ph.src=user.photoURL;
       document.getElementById('perfil-selector').style.display='flex';
+
+      // Animação de transição
+      const ls=document.getElementById('ls');
+      ls.classList.add('logging-in');
+      // Revela o app com animação
+      const main=document.querySelector('.main');
+      const hdr=document.querySelector('.hdr');
+      if(main) main.classList.add('app-reveal');
+      if(hdr) hdr.classList.add('app-reveal');
+      // Esconde o login depois da animação acabar
+      setTimeout(()=>{ ls.style.display='none'; ls.classList.remove('logging-in'); },900);
+
       await loadPerfis();
       await loadFB(); startSync(); setupUI();
     } else {
       _uid=null; if(_unsub){_unsub();_unsub=null;}
-      document.getElementById('ls').style.display='flex';
+      const ls=document.getElementById('ls');
+      ls.style.display='flex';
+      const main=document.querySelector('.main');
+      const hdr=document.querySelector('.hdr');
+      if(main) main.classList.remove('app-reveal');
+      if(hdr) hdr.classList.remove('app-reveal');
     }
   });
 });
