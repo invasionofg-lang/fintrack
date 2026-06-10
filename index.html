@@ -1283,7 +1283,7 @@ function rendaSemanal(){
   return (S.rendaBaseMensal||0)/4.3;
 }
 function updRendaTot(){
-  const sr=calcSaldoReal();
+  const sr = S.saldoReal;
   const el=document.getElementById('rp-mes');
   if(sr!==null){
     el.textContent=fmtM(sr);
@@ -1899,16 +1899,15 @@ function addExtra(){
   const data=document.getElementById('ex-data').value||todayISO();
   if(!desc||!valor){alert('Preencha descrição e valor.');return;}
   S.extras.push({id:uid(),desc,valor,data});
-  // Soma direto no saldo real se estiver configurado
   if(S.saldoReal!==null){ S.saldoReal+=valor; S.saldoRealData=todayISO(); }
   save();clearF('ex-desc','ex-val');document.getElementById('ex-data').value=todayISO();
   renderExtras();updRendaTot();updKPIs();
-  showToast(`✅ +${fmtM(valor)} adicionado ao saldo!`);
+  showToast(`✅ +${fmtM(valor)} adicionado ao saldo`);
 }
 function delExtra(id){
   if(!confirm('Excluir?'))return;
   const ex=S.extras.find(e=>e.id===id);
-  if(ex&&S.saldoReal!==null){ S.saldoReal-=ex.valor; S.saldoRealData=todayISO(); }
+  if(ex&&S.saldoReal!==null){ S.saldoReal=Math.max(0,S.saldoReal-ex.valor); S.saldoRealData=todayISO(); }
   S.extras=S.extras.filter(e=>e.id!==id);
   save();renderExtras();updRendaTot();updKPIs();
 }
@@ -2196,8 +2195,8 @@ function updKPIs(){
     document.getElementById('k-dia').textContent=fmtM(Math.max(0,saldoSemEst/7));
   }
 
-  // Saldo real
-  const sr=calcSaldoReal();
+  // Saldo real — mostra o valor bruto que o usuário informou
+  const sr = S.saldoReal;
   const srEl=document.getElementById('k-saldo-real');
   const srSub=document.getElementById('k-saldo-real-sub');
   const card=srEl.closest('.saldo-real-card');
@@ -2206,13 +2205,8 @@ function updKPIs(){
     srEl.className='kval saldo-real-val '+(sr>=0?'grn':'red');
     srSub.textContent=`Atualizado em ${fmtDate(S.saldoRealData||todayISO())}`;
     if(card){
-      if(sr<0){
-        card.style.setProperty('--neon1','rgba(232,99,122,.4)');
-        card.style.setProperty('--neon2','rgba(232,99,122,.2)');
-        card.style.borderColor='rgba(232,99,122,.4)';
-      } else {
-        card.style.borderColor='';
-      }
+      if(sr<0){card.style.borderColor='rgba(232,99,122,.4)';}
+      else{card.style.borderColor='';}
     }
   } else {
     srEl.textContent='—';srEl.className='kval saldo-real-val';
