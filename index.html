@@ -2378,19 +2378,29 @@ function calNav(dir){
 
 function contasDoDia(dia, mes, ano){
   const contas=[];
+  const dataRef=new Date(ano,mes-1,dia);
+
   S.fixos.forEach(f=>{
-    if(f.diaVenc===dia){
-      const pgPix=S.fixosPagos.some(fp=>fp.id===f.id&&fp.mes===mes&&fp.ano===ano);
-      contas.push({id:f.id, nome:f.nome, valor:f.valor, tipo:'fixo',
-        tipoPagamento:f.tipo||'pix', pago:pgPix});
-    }
+    if(f.diaVenc!==dia) return;
+    const pgPix=S.fixosPagos.some(fp=>fp.id===f.id&&fp.mes===mes&&fp.ano===ano);
+    contas.push({id:f.id, nome:f.nome, valor:f.valor, tipo:'fixo',
+      tipoPagamento:f.tipo||'pix', pago:pgPix});
   });
+
   S.parcelas.forEach(p=>{
-    if(p.diaVenc===dia){
-      const pago=p.pagas.some(x=>x.mes===mes&&x.ano===ano);
-      contas.push({id:p.id, nome:p.desc, valor:p.valor, tipo:'parcela',
-        tipoPagamento:'cartao', pago, pid:p.id});
+    if(p.diaVenc!==dia) return;
+    // Não mostra se ainda não começou
+    if(p.dataIni){
+      const ini=new Date(p.dataIni+'T12:00:00');
+      // A parcela só aparece a partir do mês/ano de início
+      if(ano<ini.getFullYear()) return;
+      if(ano===ini.getFullYear()&&mes<ini.getMonth()+1) return;
     }
+    // Não mostra se já terminou (todas pagas confirmadas)
+    if(p.pagas&&p.pagas.length>=p.total) return;
+    const pago=p.pagas.some(x=>x.mes===mes&&x.ano===ano);
+    contas.push({id:p.id, nome:p.desc, valor:p.valor, tipo:'parcela',
+      tipoPagamento:'cartao', pago, pid:p.id});
   });
   return contas;
 }
@@ -2503,74 +2513,62 @@ function renderCalDetail(dia, mes, ano){
     return;
   }
 
-  // Separar por tipo
   const fixosPix=contas.filter(c=>c.tipo==='fixo'&&c.tipoPagamento==='pix');
   const fixosCartao=contas.filter(c=>c.tipo==='fixo'&&c.tipoPagamento==='cartao');
   const parcelas=contas.filter(c=>c.tipo==='parcela');
   const fatPaga=faturaCartaoPaga(mes,ano);
-
-  // Verifica se tudo está pago
   const tudoPago=todasPagas(dia,mes,ano);
-  if(tudoPago){
-    el.innerHTML=`<div class="cal-day-detail">
-      <div class="cal-detail-title">${titulo}</div>
-      <div class="cal-all-done">
-        <span class="check-big">✅</span>
-        <p>Todas as contas pagas!</p>
-        <small>Bom trabalho — dia ${dia} quitado 🎉</small>
-      </div>
-    </div>`;
-    return;
-  }
+  const totalDia=contas.reduce((a,c)=>a+c.valor,0);
+  const totalPago=contas.filter(c=>c.pago).reduce((a,c)=>a+c.valor,0)
+    +(fatPaga?fixosCartao.reduce((a,c)=>a+c.valor,0):0);
 
   let html=`<div class="cal-day-detail">
     <div class="cal-detail-title">
       <span>${titulo}</span>
-      <span style="font-size:11px;color:var(--muted);font-weight:500">${fmtM(contas.reduce((a,c)=>a+c.valor,0))} total</span>
+      <span style="font-size:11px;color:${tudoPago?'var(--g1)':'var(--muted)'};font-weight:600">
+        ${tudoPago?'✅ Tudo pago!':fmtM(totalDia)+' total'}
+      </span>
     </div>`;
 
-  // ── Fixos PIX — marcação individual ──
-  fixosPix.forEach(c=>{
-    html+=`<div class="cal-conta-item">
-      <div style="width:32px;height:32px;border-radius:8px;background:var(--bluep);
-        display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📌</div>
+  // Pendentes primeiro, pagas depois (riscadas)
+  const renderItem=(c, isPago, onclickStr, label)=>{
+    const opacity=isPago?'opacity:.45;':'';
+    const strike=isPago?'text-decoration:line-through;color:var(--muted);':'';
+    return `<div class="cal-conta-item" style="${opacity}transition:opacity .3s">
+      <div style="width:32px;height:32px;border-radius:8px;
+        background:${c.tipo==='fixo'?'var(--bluep)':'var(--redp)'};
+        display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">
+        ${c.tipo==='fixo'?'📌':'💳'}
+      </div>
       <div class="cal-conta-info">
-        <div class="cal-conta-name">${esc(c.nome)}</div>
-        <div class="cal-conta-sub">PIX/Débito${c.pago?' · ✅ Pago':''}</div>
+        <div class="cal-conta-name" style="${strike}">${esc(c.nome)}</div>
+        <div class="cal-conta-sub">${label}${isPago?' · ✅ Pago':''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <div class="cal-conta-val">${fmtM(c.valor)}</div>
-        <button class="pago-btn ${c.pago?'active-pago':''}" style="padding:4px 10px;font-size:11px"
-          onclick="toggleFixoPagoCal('${c.id}',${mes},${ano})">
-          ${c.pago?'✅ Pago':'Pagar'}
+        <div class="cal-conta-val" style="${strike}">${fmtM(c.valor)}</div>
+        <button class="pago-btn ${isPago?'active-pago':''}"
+          style="padding:4px 10px;font-size:11px" onclick="${onclickStr}">
+          ${isPago?'✅ Pago':'Pagar'}
         </button>
       </div>
     </div>`;
+  };
+
+  // PIX — pendentes
+  fixosPix.filter(c=>!c.pago).forEach(c=>{
+    html+=renderItem(c,false,`toggleFixoPagoCal('${c.id}',${mes},${ano})`,'PIX/Débito');
+  });
+  // Parcelas — pendentes
+  parcelas.filter(c=>!c.pago).forEach(c=>{
+    html+=renderItem(c,false,`togglePagaCalendario('${c.pid}',${mes},${ano})`,'Parcela');
   });
 
-  // ── Parcelas — marcação individual ──
-  parcelas.forEach(c=>{
-    html+=`<div class="cal-conta-item">
-      <div style="width:32px;height:32px;border-radius:8px;background:var(--redp);
-        display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💳</div>
-      <div class="cal-conta-info">
-        <div class="cal-conta-name">${esc(c.nome)}</div>
-        <div class="cal-conta-sub">Parcela${c.pago?' · ✅ Pago':''}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <div class="cal-conta-val">${fmtM(c.valor)}</div>
-        <button class="pago-btn ${c.pago?'active-pago':''}" style="padding:4px 10px;font-size:11px"
-          onclick="togglePagaCalendario('${c.pid}',${mes},${ano})">
-          ${c.pago?'✅ Pago':'Pagar'}
-        </button>
-      </div>
-    </div>`;
-  });
-
-  // ── Fixos Cartão — banner coletivo ──
+  // Cartão — banner coletivo (pendente)
   if(fixosCartao.length>0){
     const totalCartao=fixosCartao.reduce((a,c)=>a+c.valor,0);
-    html+=`<div style="margin-top:10px;border-radius:12px;overflow:hidden;border:1.5px solid ${fatPaga?'rgba(39,174,96,.35)':'rgba(155,89,182,.3)'}">
+    const op=fatPaga?'opacity:.45;':'';
+    html+=`<div style="margin-top:10px;border-radius:12px;overflow:hidden;${op}
+      border:1.5px solid ${fatPaga?'rgba(39,174,96,.35)':'rgba(155,89,182,.3)'};transition:opacity .3s">
       <div style="background:${fatPaga?'rgba(39,174,96,.08)':'rgba(155,89,182,.06)'};padding:10px 13px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div>
@@ -2578,25 +2576,40 @@ function renderCalDetail(dia, mes, ano){
               💳 Faturas de Cartão${fatPaga?' — Pagas ✅':''}
             </div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">
-              ${fixosCartao.length} conta${fixosCartao.length>1?'s':''} · ${fmtM(totalCartao)} total
+              ${fixosCartao.length} conta${fixosCartao.length>1?'s':''} · ${fmtM(totalCartao)}
             </div>
           </div>
           <button onclick="toggleFaturaCartao(${mes},${ano})"
-            style="padding:7px 14px;border-radius:8px;border:1.5px solid ${fatPaga?'rgba(39,174,96,.4)':'rgba(155,89,182,.4)'};
+            style="padding:7px 14px;border-radius:8px;
+            border:1.5px solid ${fatPaga?'rgba(39,174,96,.4)':'rgba(155,89,182,.4)'};
             background:${fatPaga?'rgba(39,174,96,.12)':'rgba(155,89,182,.1)'};
             font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;
             color:${fatPaga?'var(--g1)':'var(--pur)'}">
-            ${fatPaga?'✅ Pago':'Marcar tudo pago'}
+            ${fatPaga?'✅ Pago':'Marcar pago'}
           </button>
         </div>
         ${fixosCartao.map(c=>`
           <div style="display:flex;justify-content:space-between;align-items:center;
-            padding:6px 0;border-top:1px solid var(--border);font-size:12px">
-            <span style="color:var(--text);font-weight:500">${esc(c.nome)}</span>
+            padding:5px 0;border-top:1px solid var(--border);font-size:12px;
+            ${fatPaga?'text-decoration:line-through;color:var(--muted);':''}">
+            <span style="font-weight:500">${esc(c.nome)}</span>
             <span style="font-weight:700">${fmtM(c.valor)}</span>
           </div>`).join('')}
       </div>
     </div>`;
+  }
+
+  // Separador se tiver itens pagos
+  const temPagos=fixosPix.some(c=>c.pago)||parcelas.some(c=>c.pago);
+  if(temPagos){
+    html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px">✅ Pagos</div>`;
+    fixosPix.filter(c=>c.pago).forEach(c=>{
+      html+=renderItem(c,true,`toggleFixoPagoCal('${c.id}',${mes},${ano})`,'PIX/Débito');
+    });
+    parcelas.filter(c=>c.pago).forEach(c=>{
+      html+=renderItem(c,true,`togglePagaCalendario('${c.pid}',${mes},${ano})`,'Parcela');
+    });
   }
 
   html+='</div>';
