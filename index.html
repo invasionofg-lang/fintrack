@@ -1122,6 +1122,11 @@ footer{max-width:680px;margin:20px auto 0;padding:0 14px 16px;
           + Criar
         </button>
       </div>
+      <button onclick="recuperarDadosAntigos()" style="width:100%;padding:10px;margin-bottom:8px;
+        background:rgba(39,174,96,.08);border:1.5px solid rgba(39,174,96,.3);border-radius:var(--rs);
+        font-family:var(--font);font-size:12px;font-weight:700;color:var(--g1);cursor:pointer">
+        🔄 Recuperar meus dados anteriores
+      </button>
       <button onclick="confirmLogout()" style="width:100%;padding:10px;background:none;
         border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);
         font-size:12px;font-weight:600;color:var(--muted);cursor:pointer">
@@ -2800,6 +2805,39 @@ async function trocarPerfil(id){
 
 
 let _saudeOpen = false;
+
+async function recuperarDadosAntigos(){
+  if(!confirm('Vai buscar seus dados salvos anteriormente. Continuar?')) return;
+  try{
+    showToast('⏳ Buscando dados...');
+    const oldRef=window._fb.doc(window._fb.db,'users',_uid,'data','state');
+    const oldSnap=await window._fb.getDoc(oldRef);
+    if(oldSnap.exists()&&oldSnap.data().ultimaAt){
+      S=Object.assign(S,oldSnap.data());
+      S.ultimaAt=new Date().toISOString();
+      await window._fb.setDoc(perfilRef(),JSON.parse(JSON.stringify(S)));
+      migrate();updAll();setupUI();
+      document.getElementById('mbk-perfis').classList.remove('op');
+      showToast('✅ Dados recuperados!');
+      return;
+    }
+    // Tenta localStorage como fallback
+    const local=localStorage.getItem('fintrack_v2');
+    if(local){
+      const parsed=JSON.parse(local);
+      if(parsed.ultimaAt){
+        S=Object.assign(S,parsed);
+        S.ultimaAt=new Date().toISOString();
+        await window._fb.setDoc(perfilRef(),JSON.parse(JSON.stringify(S)));
+        migrate();updAll();setupUI();
+        document.getElementById('mbk-perfis').classList.remove('op');
+        showToast('✅ Recuperado do cache local!');
+        return;
+      }
+    }
+    showToast('⚠️ Nenhum dado anterior encontrado');
+  }catch(e){showToast('⚠️ Erro: '+e.message);console.error(e);}
+}
 
 function toggleSaude(){
   _saudeOpen = !_saudeOpen;
