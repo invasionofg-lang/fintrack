@@ -2499,20 +2499,19 @@ function renderAgenda(){
   html+='</div>';
   document.getElementById('cal-grid').innerHTML=html;
 
-  // Mostra detalhe do dia selecionado ou hoje
-  const diaDetail=_calSelected||(mes===hm&&ano===hy?hd:null);
-  if(diaDetail) renderCalDetail(diaDetail, mes+1, ano);
+  // Detalhe: só mostra dia explicitamente selecionado (não auto-seleciona hoje)
+  if(_calSelected!==null) renderCalDetail(_calSelected, mes+1, ano);
   else document.getElementById('cal-day-detail').innerHTML='';
 }
 
 function calSelectDay(d){
-  _calSelected=_calSelected===d?null:d;
+  _calSelected = (_calSelected===d) ? null : d;
   renderAgenda();
-  if(_calSelected){
+  if(_calSelected!==null){
     setTimeout(()=>{
       const el=document.getElementById('cal-day-detail');
-      if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
-    },80);
+      if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
+    },100);
   }
 }
 
