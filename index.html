@@ -1356,7 +1356,9 @@ function setParcFilter(f){
   renderParcelas();
 }
 function parcStatus(p){
-  if(p.atual>p.total) return 'finalizada';
+  // Finalizada = todos os pagamentos confirmados em pagas[]
+  if(p.pagas && p.pagas.length >= p.total) return 'finalizada';
+  if(p.atual>p.total && p.pagas && p.pagas.length >= p.total) return 'finalizada';
   if(p.total-p.atual+1<=2) return 'quitada';
   if(p.atual<=2) return 'inicio';
   return 'normal';
@@ -1367,7 +1369,14 @@ function parcelaPagaHoje(p){
 }
 function parcelaAtrasada(p){
   if(!p.diaVenc) return false;
-  return new Date().getDate()>p.diaVenc&&!parcelaPagaHoje(p);
+  // Só é atrasada se a data de início já passou E não foi paga esse mês
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const dataIni = p.dataIni ? new Date(p.dataIni+'T12:00:00') : null;
+  if(dataIni && dataIni > hoje) return false; // ainda nem começou
+  // Vencimento deste mês
+  const vencMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), p.diaVenc);
+  if(vencMesAtual > hoje) return false; // ainda não venceu
+  return !parcelaPagaHoje(p);
 }
 function calcFimPrev(){
   const ini=document.getElementById('p-ini').value;
@@ -2599,15 +2608,22 @@ function calcSaude(){
 
   S.parcelas.forEach(p => {
     if(!p.diaVenc) return;
-    if(p.pagas && p.atual >= p.total) return; // quitada
+    // Só pula se realmente todas as parcelas foram pagas em pagas[]
+    if(p.pagas && p.pagas.length >= p.total) return;
     const jaPago = p.pagas && p.pagas.some(pg => pg.mes===mesHoje && pg.ano===anoHoje);
-    let diaVenc = p.diaVenc;
-    let vencDate = new Date(anoHoje, mesHoje-1, diaVenc);
-    if(vencDate < hoje) vencDate = new Date(anoHoje, mesHoje, diaVenc);
+    // Calcula próxima data de vencimento corretamente
+    let vencDate = new Date(anoHoje, mesHoje-1, p.diaVenc);
+    // Se o vencimento deste mês já passou E já foi pago este mês, vai pro próximo mês
+    if(vencDate < hoje && jaPago) vencDate = new Date(anoHoje, mesHoje, p.diaVenc);
+    // Se ainda não começou (dataIni no futuro), usa a data de início
+    if(p.dataIni){
+      const dataIni = new Date(p.dataIni+'T12:00:00');
+      if(dataIni > hoje) vencDate = dataIni;
+    }
     const diasRestantes = Math.round((vencDate - hoje) / 86400000);
     contas.push({
       id: p.id, nome: p.desc, valor: p.valor, tipo: 'parcela',
-      tipoPag: 'cartao', diaVenc, diasRestantes, jaPago, vencDate
+      tipoPag: 'cartao', diaVenc: p.diaVenc, diasRestantes, jaPago, vencDate
     });
   });
 
