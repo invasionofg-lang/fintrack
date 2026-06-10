@@ -2405,13 +2405,18 @@ function contasDoDia(dia, mes, ano){
     // Não mostra se ainda não começou
     if(p.dataIni){
       const ini=new Date(p.dataIni+'T12:00:00');
-      // A parcela só aparece a partir do mês/ano de início
       if(ano<ini.getFullYear()) return;
       if(ano===ini.getFullYear()&&mes<ini.getMonth()+1) return;
     }
-    // Não mostra se já terminou (todas pagas confirmadas)
-    if(p.pagas&&p.pagas.length>=p.total) return;
-    const pago=p.pagas.some(x=>x.mes===mes&&x.ano===ano);
+    // Não mostra se já terminou — verifica pela data de fim prevista
+    if(p.dataIni&&p.total){
+      const ini=new Date(p.dataIni+'T12:00:00');
+      const fimMes=ini.getMonth()+p.total; // mês de fim (pode passar de 11)
+      const fimAno=ini.getFullYear()+Math.floor(fimMes/12);
+      const fimMesReal=fimMes%12;
+      if(ano>fimAno||(ano===fimAno&&mes>fimMesReal)) return;
+    }
+    const pago=p.pagas&&p.pagas.some(x=>x.mes===mes&&x.ano===ano);
     contas.push({id:p.id, nome:p.desc, valor:p.valor, tipo:'parcela',
       tipoPagamento:'cartao', pago, pid:p.id});
   });
@@ -2477,6 +2482,7 @@ function renderAgenda(){
     </svg>`;
     if(allDone&&contas.length){
       html+=`<div class="${classes}" style="background:#27AE60;border-color:#27AE60" onclick="calSelectDay(${d})">
+        <span class="cal-day-num" style="color:rgba(255,255,255,.9);position:relative;z-index:1;font-size:11px">${d}</span>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:8px">
           ${checkSVG}
         </div>
@@ -2505,6 +2511,12 @@ function renderAgenda(){
 function calSelectDay(d){
   _calSelected=_calSelected===d?null:d;
   renderAgenda();
+  if(_calSelected){
+    setTimeout(()=>{
+      const el=document.getElementById('cal-day-detail');
+      if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+    },80);
+  }
 }
 
 function renderCalDetail(dia, mes, ano){
@@ -2874,8 +2886,15 @@ function calcSaude(){
 
   S.parcelas.forEach(p => {
     if(!p.diaVenc) return;
-    // Só pula se realmente todas as parcelas foram pagas em pagas[]
-    if(p.pagas && p.pagas.length >= p.total) return;
+    // Só pula se a data de fim já passou
+    if(p.dataIni&&p.total){
+      const ini=new Date(p.dataIni+'T12:00:00');
+      const fimMes=ini.getMonth()+p.total;
+      const fimAno=ini.getFullYear()+Math.floor(fimMes/12);
+      const fimMesReal=fimMes%12;
+      const fimDate=new Date(fimAno,fimMesReal,p.diaVenc);
+      if(fimDate<hoje) return; // terminou
+    }
     const jaPago = p.pagas && p.pagas.some(pg => pg.mes===mesHoje && pg.ano===anoHoje);
     // Calcula próxima data de vencimento corretamente
     let vencDate = new Date(anoHoje, mesHoje-1, p.diaVenc);
