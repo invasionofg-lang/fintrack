@@ -569,7 +569,10 @@ footer{max-width:680px;margin:20px auto 0;padding:0 14px 16px;
 
 
 
-/* Data fields — stack vertically on mobile */
+/* iOS — previne zoom ao focar inputs */
+@media(max-width:600px){
+  input, select, textarea { font-size:16px !important; }
+}
 @media(max-width:600px){
   .frow.date-row{grid-template-columns:1fr}
   /* Prevent date input from overflowing on iOS */
@@ -1076,7 +1079,7 @@ footer{max-width:680px;margin:20px auto 0;padding:0 14px 16px;
       <div style="display:flex;gap:8px">
         <input type="text" id="perfil-novo-nome" placeholder="ex: Pai, Mãe, Mari..."
           style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--rs);
-          font-family:var(--font);font-size:13px;font-weight:500;outline:none">
+          font-family:var(--font);font-size:16px;font-weight:500;outline:none">
         <button onclick="criarPerfil()" style="padding:10px 16px;background:var(--g1);color:#fff;
           border:none;border-radius:var(--rs);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">
           + Criar
@@ -3009,4 +3012,3 @@ loadLocal();
 </script>
 </body>
 </html>
-
