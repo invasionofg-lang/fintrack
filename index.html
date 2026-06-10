@@ -847,6 +847,10 @@ footer{max-width:680px;margin:20px auto 0;padding:0 14px 16px;
       <div class="frow">
         <div class="fld"><label>Dia de vencimento</label>
           <input type="number" id="f-dia" placeholder="ex: 5" min="1" max="31"></div>
+        <div class="fld"><label>Início (opcional)</label>
+          <input type="date" id="f-ini" placeholder="dd/mm/aaaa"></div>
+      </div>
+      <div class="frow s1" style="margin-bottom:8px">
         <div class="fld"><label>Tipo</label>
           <div class="tog">
             <button class="tog-btn ap" id="tp-pix" onclick="setTipo('pix')">PIX</button>
@@ -1457,9 +1461,12 @@ function addFixo(nome,valor,cat,tipo,diaVenc){
   cat=cat||document.getElementById('f-cat').value;
   tipo=tipo||S.tipoFixo;
   diaVenc=diaVenc||parseInt(document.getElementById('f-dia').value)||null;
+  const dataIni=document.getElementById('f-ini')?.value||null;
   if(!nome||!valor){alert('Preencha nome e valor.');return;}
-  S.fixos.push({id:uid(),nome,valor,cat,tipo,diaVenc});
-  save();clearF('f-nome','f-valor','f-dia');closeModal();renderFixos();updKPIs();
+  S.fixos.push({id:uid(),nome,valor,cat,tipo,diaVenc,dataIni:dataIni||null});
+  save();clearF('f-nome','f-valor','f-dia');
+  if(document.getElementById('f-ini')) document.getElementById('f-ini').value='';
+  closeModal();renderFixos();updKPIs();
 }
 function delFixo(id){if(!confirm('Excluir?'))return;S.fixos=S.fixos.filter(f=>f.id!==id);save();renderFixos();updKPIs();}
 function renderFixos(){
@@ -2382,9 +2389,15 @@ function contasDoDia(dia, mes, ano){
 
   S.fixos.forEach(f=>{
     if(f.diaVenc!==dia) return;
-    const pgPix=S.fixosPagos.some(fp=>fp.id===f.id&&fp.mes===mes&&fp.ano===ano);
+    // Não mostra se ainda não começou
+    if(f.dataIni){
+      const ini=new Date(f.dataIni+'T12:00:00');
+      if(ano<ini.getFullYear()) return;
+      if(ano===ini.getFullYear()&&mes<ini.getMonth()+1) return;
+    }
+    const pago=S.fixosPagos.some(fp=>fp.id===f.id&&fp.mes===mes&&fp.ano===ano);
     contas.push({id:f.id, nome:f.nome, valor:f.valor, tipo:'fixo',
-      tipoPagamento:f.tipo||'pix', pago:pgPix});
+      tipoPagamento:f.tipo||'pix', pago});
   });
 
   S.parcelas.forEach(p=>{
@@ -2405,26 +2418,22 @@ function contasDoDia(dia, mes, ano){
   return contas;
 }
 
-function faturaCartaoPaga(mes, ano){
-  return S.fixosCartaoPagosMes.some(x=>x.mes===mes&&x.ano===ano);
+function faturaCartaoPaga(id, mes, ano){
+  // Verifica por id individual (novo) ou pelo sistema antigo (retrocompat)
+  return S.fixosPagos.some(fp=>fp.id===id&&fp.mes===mes&&fp.ano===ano);
 }
-function toggleFaturaCartao(mes, ano){
-  const idx=S.fixosCartaoPagosMes.findIndex(x=>x.mes===mes&&x.ano===ano);
-  if(idx>=0) S.fixosCartaoPagosMes.splice(idx,1);
-  else S.fixosCartaoPagosMes.push({mes,ano});
+function toggleFaturaCartao(id, mes, ano){
+  // Usa o mesmo array fixosPagos — unifica pix e cartão
+  const idx=S.fixosPagos.findIndex(fp=>fp.id===id&&fp.mes===mes&&fp.ano===ano);
+  if(idx>=0) S.fixosPagos.splice(idx,1);
+  else S.fixosPagos.push({id,mes,ano});
   save(); renderAgenda(); updKPIs();
 }
 
 function todasPagas(dia, mes, ano){
   const contas=contasDoDia(dia,mes,ano);
   if(!contas.length) return false;
-  const parcelas=contas.filter(c=>c.tipo==='parcela');
-  const fixosPix=contas.filter(c=>c.tipo==='fixo'&&c.tipoPagamento==='pix');
-  const fixosCartao=contas.filter(c=>c.tipo==='fixo'&&c.tipoPagamento==='cartao');
-  const parcelasPagas=parcelas.every(c=>c.pago);
-  const pixPagos=fixosPix.every(c=>c.pago);
-  const cartaoPago=fixosCartao.length===0||faturaCartaoPaga(mes,ano);
-  return parcelasPagas&&pixPagos&&cartaoPago&&(parcelas.length+fixosPix.length+fixosCartao.length)>0;
+  return contas.every(c=>c.pago) && contas.length>0;
 }
 
 function renderAgenda(){
@@ -2455,7 +2464,7 @@ function renderAgenda(){
     const dots=contas.map(c=>{
       let cor;
       if(c.tipo==='parcela') cor=c.pago?'#27AE60':'#E8637A';
-      else if(c.tipoPagamento==='cartao') cor=faturaCartaoPaga(mes+1,ano)?'#27AE60':'#9B59B6';
+      else if(c.tipoPagamento==='cartao') cor=c.pago?'#27AE60':'#9B59B6';
       else cor=c.pago?'#27AE60':'#3498DB';
       return `<div class="cal-dot" style="background:${cor}"></div>`;
     }).join('');
@@ -2516,7 +2525,6 @@ function renderCalDetail(dia, mes, ano){
   const fixosPix=contas.filter(c=>c.tipo==='fixo'&&c.tipoPagamento==='pix');
   const fixosCartao=contas.filter(c=>c.tipo==='fixo'&&c.tipoPagamento==='cartao');
   const parcelas=contas.filter(c=>c.tipo==='parcela');
-  const fatPaga=faturaCartaoPaga(mes,ano);
   const tudoPago=todasPagas(dia,mes,ano);
   const totalDia=contas.reduce((a,c)=>a+c.valor,0);
   const totalPago=contas.filter(c=>c.pago).reduce((a,c)=>a+c.valor,0)
@@ -2556,59 +2564,30 @@ function renderCalDetail(dia, mes, ano){
 
   // PIX — pendentes
   fixosPix.filter(c=>!c.pago).forEach(c=>{
-    html+=renderItem(c,false,`toggleFixoPagoCal('${c.id}',${mes},${ano})`,'PIX/Débito');
+    html+=renderItem(c,false,`toggleFixoPagoCal('${c.id}',${mes},${ano})`,'📌 PIX/Débito');
+  });
+  // Cartão fixo — pendentes (individual)
+  fixosCartao.filter(c=>!c.pago).forEach(c=>{
+    html+=renderItem(c,false,`toggleFaturaCartao('${c.id}',${mes},${ano})`,'💳 Fixo cartão');
   });
   // Parcelas — pendentes
   parcelas.filter(c=>!c.pago).forEach(c=>{
-    html+=renderItem(c,false,`togglePagaCalendario('${c.pid}',${mes},${ano})`,'Parcela');
+    html+=renderItem(c,false,`togglePagaCalendario('${c.pid}',${mes},${ano})`,'💳 Parcela');
   });
 
-  // Cartão — banner coletivo (pendente)
-  if(fixosCartao.length>0){
-    const totalCartao=fixosCartao.reduce((a,c)=>a+c.valor,0);
-    const op=fatPaga?'opacity:.45;':'';
-    html+=`<div style="margin-top:10px;border-radius:12px;overflow:hidden;${op}
-      border:1.5px solid ${fatPaga?'rgba(39,174,96,.35)':'rgba(155,89,182,.3)'};transition:opacity .3s">
-      <div style="background:${fatPaga?'rgba(39,174,96,.08)':'rgba(155,89,182,.06)'};padding:10px 13px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div>
-            <div style="font-size:12px;font-weight:700;color:${fatPaga?'var(--g1)':'var(--pur)'}">
-              💳 Faturas de Cartão${fatPaga?' — Pagas ✅':''}
-            </div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">
-              ${fixosCartao.length} conta${fixosCartao.length>1?'s':''} · ${fmtM(totalCartao)}
-            </div>
-          </div>
-          <button onclick="toggleFaturaCartao(${mes},${ano})"
-            style="padding:7px 14px;border-radius:8px;
-            border:1.5px solid ${fatPaga?'rgba(39,174,96,.4)':'rgba(155,89,182,.4)'};
-            background:${fatPaga?'rgba(39,174,96,.12)':'rgba(155,89,182,.1)'};
-            font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;
-            color:${fatPaga?'var(--g1)':'var(--pur)'}">
-            ${fatPaga?'✅ Pago':'Marcar pago'}
-          </button>
-        </div>
-        ${fixosCartao.map(c=>`
-          <div style="display:flex;justify-content:space-between;align-items:center;
-            padding:5px 0;border-top:1px solid var(--border);font-size:12px;
-            ${fatPaga?'text-decoration:line-through;color:var(--muted);':''}">
-            <span style="font-weight:500">${esc(c.nome)}</span>
-            <span style="font-weight:700">${fmtM(c.valor)}</span>
-          </div>`).join('')}
-      </div>
-    </div>`;
-  }
-
-  // Separador se tiver itens pagos
-  const temPagos=fixosPix.some(c=>c.pago)||parcelas.some(c=>c.pago);
+  // Separador pagos
+  const temPagos=contas.some(c=>c.pago);
   if(temPagos){
     html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);
       text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px">✅ Pagos</div>`;
     fixosPix.filter(c=>c.pago).forEach(c=>{
-      html+=renderItem(c,true,`toggleFixoPagoCal('${c.id}',${mes},${ano})`,'PIX/Débito');
+      html+=renderItem(c,true,`toggleFixoPagoCal('${c.id}',${mes},${ano})`,'📌 PIX/Débito');
+    });
+    fixosCartao.filter(c=>c.pago).forEach(c=>{
+      html+=renderItem(c,true,`toggleFaturaCartao('${c.id}',${mes},${ano})`,'💳 Fixo cartão');
     });
     parcelas.filter(c=>c.pago).forEach(c=>{
-      html+=renderItem(c,true,`togglePagaCalendario('${c.pid}',${mes},${ano})`,'Parcela');
+      html+=renderItem(c,true,`togglePagaCalendario('${c.pid}',${mes},${ano})`,'💳 Parcela');
     });
   }
 
