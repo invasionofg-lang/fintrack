@@ -2478,17 +2478,17 @@ function renderAgenda(){
         style="animation:drawCheck .4s .05s ease forwards"/>
     </svg>`;
     if(allDone&&contas.length){
-      html+=`<div class="${classes}" style="background:#27AE60;border-color:#27AE60;cursor:pointer" onclick="calSelectDay(${d})">
-        <span class="cal-day-num" style="color:rgba(255,255,255,.9);position:relative;z-index:1;font-size:11px;pointer-events:none">${d}</span>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:8px;pointer-events:none">
+      html+=`<div class="${classes}" style="background:#27AE60;border-color:#27AE60" data-day="${d}">
+        <span class="cal-day-num" style="color:rgba(255,255,255,.9);font-size:11px">${d}</span>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:8px">
           ${checkSVG}
         </div>
-        <div class="cal-dots" style="position:absolute;bottom:3px;pointer-events:none">${dots}</div>
+        <div class="cal-dots" style="position:absolute;bottom:3px">${dots}</div>
       </div>`;
     } else {
-      html+=`<div class="${classes}" onclick="calSelectDay(${d})" style="cursor:pointer">
-        <span class="cal-day-num" style="pointer-events:none">${d}</span>
-        <div class="cal-dots" style="pointer-events:none">${dots}</div>
+      html+=`<div class="${classes}" data-day="${d}">
+        <span class="cal-day-num">${d}</span>
+        <div class="cal-dots">${dots}</div>
       </div>`;
     }
   }
@@ -2498,6 +2498,19 @@ function renderAgenda(){
   for(let i=1;i<=resto;i++) html+=`<div class="cal-day other-month"><span class="cal-day-num">${i}</span></div>`;
   html+='</div>';
   document.getElementById('cal-grid').innerHTML=html;
+
+  // Event delegation — captura toque em qualquer dia via bubbling
+  document.getElementById('cal-grid').ontouchend=function(e){
+    e.preventDefault();
+    const day=e.target.closest('[data-day]');
+    if(!day) return;
+    calSelectDay(parseInt(day.dataset.day));
+  };
+  document.getElementById('cal-grid').onclick=function(e){
+    const day=e.target.closest('[data-day]');
+    if(!day) return;
+    calSelectDay(parseInt(day.dataset.day));
+  };
 
   // Detalhe: só mostra dia explicitamente selecionado (não auto-seleciona hoje)
   if(_calSelected!==null) renderCalDetail(_calSelected, mes+1, ano);
