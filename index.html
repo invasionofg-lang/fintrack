@@ -1647,13 +1647,29 @@ function togglePagaBtn(pid){
   const n=new Date();const mes=n.getMonth()+1,ano=n.getFullYear();
   const p=S.parcelas.find(x=>x.id===pid);if(!p)return;
   const idx=p.pagas.findIndex(x=>x.mes===mes&&x.ano===ano);
-  if(idx>=0)p.pagas.splice(idx,1);else p.pagas.push({mes,ano,ts:Date.now()});
+  if(idx>=0){
+    const pg=p.pagas[idx];
+    if(_deveDescontar()&&pg.ts&&pg.ts>=(S.saldoRealTs||0))S.saldoReal+=p.valor;
+    p.pagas.splice(idx,1);
+  } else {
+    const ts=Date.now();
+    p.pagas.push({mes,ano,ts});
+    if(_deveDescontar())S.saldoReal-=p.valor;
+  }
   save();renderParcelas();updKPIs();renderChkList();
 }
 function togglePaga(pid,mes,ano){
   const p=S.parcelas.find(x=>x.id===pid);if(!p)return;
   const idx=p.pagas.findIndex(x=>x.mes===mes&&x.ano===ano);
-  if(idx>=0)p.pagas.splice(idx,1);else p.pagas.push({mes,ano,ts:Date.now()});
+  if(idx>=0){
+    const pg=p.pagas[idx];
+    if(_deveDescontar()&&pg.ts&&pg.ts>=(S.saldoRealTs||0))S.saldoReal+=p.valor;
+    p.pagas.splice(idx,1);
+  } else {
+    const ts=Date.now();
+    p.pagas.push({mes,ano,ts});
+    if(_deveDescontar())S.saldoReal-=p.valor;
+  }
   save();renderParcelas();updKPIs();renderChkList();
 }
 function toggleExpand(id){
@@ -2205,6 +2221,7 @@ function saveSaldoReal(){
   if(isNaN(v)){alert('Digite um valor válido.');return;}
   S.saldoReal=v;
   S.saldoRealData=todayISO();
+  S.saldoRealTs=Date.now();
   save();
   document.getElementById('mbk-saldo').classList.remove('op');
   updKPIs();updRendaTot();
@@ -2307,10 +2324,26 @@ let _alertaFixosPix=[], _alertaFixosCartao=[], _alertaMes=0, _alertaAno=0;
 function renderFixoAlertatAtual(){
   renderFixoAlerta(_alertaFixosPix, _alertaFixosCartao, _alertaMes, _alertaAno);
 }
+// Helper: só mexe no saldoReal se o pagamento ocorre APÓS o último saldo manual
+function _deveDescontar(){return S.saldoReal!==null&&(S.saldoRealTs||0)>0;}
+
 function toggleFixoPagoCal(fid, mes, ano){
   const idx=S.fixosPagos.findIndex(fp=>fp.id===fid&&fp.mes===mes&&fp.ano===ano);
-  if(idx>=0) S.fixosPagos.splice(idx,1);
-  else S.fixosPagos.push({id:fid,mes,ano,ts:Date.now()});
+  if(idx>=0){
+    const fp=S.fixosPagos[idx];
+    if(_deveDescontar()&&fp.ts&&fp.ts>=(S.saldoRealTs||0)){
+      const f=S.fixos.find(x=>x.id===fid);
+      if(f)S.saldoReal+=f.valor;
+    }
+    S.fixosPagos.splice(idx,1);
+  } else {
+    const ts=Date.now();
+    S.fixosPagos.push({id:fid,mes,ano,ts});
+    if(_deveDescontar()){
+      const f=S.fixos.find(x=>x.id===fid);
+      if(f)S.saldoReal-=f.valor;
+    }
+  }
   save(); renderAgenda(); updKPIs();
 }
 function toggleFixoAlerta(disabled){S.alertasConfig.fixos=!disabled;save();}
@@ -2322,6 +2355,7 @@ function confirmarRecebimento(){
   if(S.saldoReal===null)S.saldoReal=0;
   S.saldoReal+=v;
   S.saldoRealData=todayISO();
+  S.saldoRealTs=Date.now();
   if(document.getElementById('receb-disable').checked) S.alertasConfig.recebimento=false;
   save();document.getElementById('mbk-receb').classList.remove('op');
   updKPIs();showToast(`✅ R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})} adicionado ao saldo!`);
@@ -2507,10 +2541,22 @@ function faturaCartaoPaga(id, mes, ano){
   return S.fixosPagos.some(fp=>fp.id===id&&fp.mes===mes&&fp.ano===ano);
 }
 function toggleFaturaCartao(id, mes, ano){
-  // Usa o mesmo array fixosPagos — unifica pix e cartão
   const idx=S.fixosPagos.findIndex(fp=>fp.id===id&&fp.mes===mes&&fp.ano===ano);
-  if(idx>=0) S.fixosPagos.splice(idx,1);
-  else S.fixosPagos.push({id,mes,ano,ts:Date.now()});
+  if(idx>=0){
+    const fp=S.fixosPagos[idx];
+    if(_deveDescontar()&&fp.ts&&fp.ts>=(S.saldoRealTs||0)){
+      const f=S.fixos.find(x=>x.id===id);
+      if(f)S.saldoReal+=f.valor;
+    }
+    S.fixosPagos.splice(idx,1);
+  } else {
+    const ts=Date.now();
+    S.fixosPagos.push({id,mes,ano,ts});
+    if(_deveDescontar()){
+      const f=S.fixos.find(x=>x.id===id);
+      if(f)S.saldoReal-=f.valor;
+    }
+  }
   save(); renderAgenda(); updKPIs();
 }
 
@@ -2699,12 +2745,19 @@ function renderCalDetail(dia, mes, ano){
 function togglePagaCalendario(pid, mes, ano){
   const p=S.parcelas.find(x=>x.id===pid);if(!p)return;
   const idx=p.pagas.findIndex(x=>x.mes===mes&&x.ano===ano);
-  if(idx>=0)p.pagas.splice(idx,1);else p.pagas.push({mes,ano,ts:Date.now()});
+  if(idx>=0){
+    const pg=p.pagas[idx];
+    if(_deveDescontar()&&pg.ts&&pg.ts>=(S.saldoRealTs||0))S.saldoReal+=p.valor;
+    p.pagas.splice(idx,1);
+  } else {
+    const ts=Date.now();
+    p.pagas.push({mes,ano,ts});
+    if(_deveDescontar())S.saldoReal-=p.valor;
+  }
   save();
   renderAgenda();
   renderParcelas();
   updKPIs();
-  // Animação de confete leve se todas pagas
   const dia=_calSelected||(new Date().getDate());
   if(todasPagas(dia,mes,ano)) setTimeout(()=>renderAgenda(),100);
 }
