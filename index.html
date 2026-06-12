@@ -1373,14 +1373,13 @@ function startSync(){
 }
 async function saveFB(){
   if(!_uid) return;
-  // Nunca salva um estado vazio (sem ultimaAt = perfil novo ainda não usado)
   if(!S.ultimaAt) return;
   _saving=true;
   try{
     await window._fb.setDoc(perfilRef(),JSON.parse(JSON.stringify(S)));
     showToast('✓ Salvo');
   }catch(e){showToast('⚠️ Erro ao salvar');}
-  setTimeout(()=>{_saving=false;},1000);
+  setTimeout(()=>{_saving=false;},5000); // 5s para garantir que snapshot não sobrescreve
 }
 function showToast(msg){
   const el=document.getElementById('sync-toast');
@@ -1401,6 +1400,7 @@ function migrate(){
   if(!S.metaMensal)S.metaMensal=0;
   if(S.saldoReal===undefined)S.saldoReal=null;
   if(S.saldoRealTs===undefined)S.saldoRealTs=null;
+  if(S.saldoSnap===undefined)S.saldoSnap=null;
   if(!S.fixosPagos)S.fixosPagos=[];
   if(!S.fixosCartaoPagosMes)S.fixosCartaoPagosMes=[];
   if(!S.recebimentos)S.recebimentos=[];
@@ -2187,54 +2187,45 @@ function renderExtras(){
 
 // ══ SALDO REAL ══
 function calcSaldoReal(){
-  if(S.saldoReal===null) return null;
-  let saldo=S.saldoReal;
-  const dataBase=S.saldoRealData||todayISO();
+  if(S.saldoReal===null||S.saldoReal===undefined) return null;
+  let saldo = Number(S.saldoReal)||0;
 
-function calcSaldoReal(){
-  if(S.saldoReal===null) return null;
-  // Se não tem timestamp de reset, mostra o valor bruto sem descontos
-  // (usuário ainda não atualizou com o novo sistema)
-  if(!S.saldoRealTs) return S.saldoReal;
+  // Se não tem snapshot, retorna o valor bruto
+  if(!S.saldoSnap) return saldo;
 
-  let saldo=S.saldoReal;
-  const tsBase = S.saldoRealTs;
+  const snap = S.saldoSnap;
 
-  // Gastos variáveis — só desconta se criado APÓS o reset
-  S.semanaAtual.gastos.forEach(g=>{
-    if(g.ts && g.ts > tsBase) saldo -= g.valor;
-  });
-  S.semanasHist.forEach(s=>{
-    s.gastos.forEach(g=>{ if(g.ts && g.ts > tsBase) saldo -= g.valor; });
+  // Gastos variáveis novos (não existiam no momento do reset)
+  const gastosAtuais = S.semanaAtual.gastos;
+  const gastosSnap = snap.gastosIds || [];
+  gastosAtuais.forEach(g=>{
+    if(!gastosSnap.includes(g.id)) saldo -= (g.valor||0);
   });
 
-  // Recebimentos confirmados após reset
-  S.recebimentos.forEach(r=>{
-    if(r.ts && r.ts > tsBase) saldo += r.valor;
-  });
-
-  // Extras adicionados após reset
-  S.extras.forEach(e=>{
-    if(e.ts && e.ts > tsBase && e.noSaldo) saldo += e.valor;
-  });
-
-  // Parcelas pagas após reset
+  // Parcelas pagas novas
   S.parcelas.forEach(p=>{
     p.pagas.forEach(pg=>{
-      if(pg.ts && pg.ts > tsBase) saldo -= p.valor;
+      const key = `${p.id}_${pg.mes}_${pg.ano}`;
+      if(!(snap.pagasIds||[]).includes(key)) saldo -= (p.valor||0);
     });
   });
 
-  // Fixos pagos após reset
+  // Fixos pagos novos
   S.fixosPagos.forEach(fp=>{
-    if(fp.ts && fp.ts > tsBase){
+    const key = `${fp.id}_${fp.mes}_${fp.ano}`;
+    if(!(snap.fixosPagosIds||[]).includes(key)){
       const f=S.fixos.find(x=>x.id===fp.id);
-      if(f) saldo -= f.valor;
+      if(f) saldo -= (f.valor||0);
     }
   });
 
+  // Extras novos
+  const extrasSnap = snap.extrasIds || [];
+  S.extras.forEach(e=>{
+    if(!extrasSnap.includes(e.id) && e.noSaldo) saldo += (e.valor||0);
+  });
+
   return saldo;
-}
 }
 function openSaldoModal(){
   const el=document.getElementById('saldo-input');
@@ -2246,8 +2237,15 @@ function saveSaldoReal(){
   if(isNaN(v)){alert('Digite um valor válido.');return;}
   S.saldoReal=v;
   S.saldoRealData=todayISO();
-  S.saldoRealTs=Date.now(); // timestamp exato do reset
-  save();document.getElementById('mbk-saldo').classList.remove('op');
+  // Guarda snapshot dos IDs existentes no momento do reset
+  S.saldoSnap={
+    gastosIds: S.semanaAtual.gastos.map(g=>g.id),
+    pagasIds: S.parcelas.flatMap(p=>p.pagas.map(pg=>`${p.id}_${pg.mes}_${pg.ano}`)),
+    fixosPagosIds: S.fixosPagos.map(fp=>`${fp.id}_${fp.mes}_${fp.ano}`),
+    extrasIds: S.extras.map(e=>e.id)
+  };
+  save();
+  document.getElementById('mbk-saldo').classList.remove('op');
   updKPIs();updRendaTot();
 }
 function clearSaldoReal(){
@@ -2902,7 +2900,7 @@ async function trocarPerfil(id){
     extras:[],fixos:[],parcelas:[],semanasHist:[],
     semanaAtual:{gastos:[],inicioISO:null},
     tipoFixo:'pix',histPeriod:'semana',metaMensal:0,
-    saldoReal:null,saldoRealData:null,saldoRealTs:null,
+    saldoReal:null,saldoRealData:null,saldoRealTs:null,saldoSnap:null,
     fixosPagos:[],fixosCartaoPagosMes:[],recebimentos:[],
     alertasConfig:{recebimento:true,fixos:true,debitoAutoFixos:false},
     ultimaVerificacao:null,ultimaAt:null
