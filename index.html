@@ -2319,6 +2319,9 @@ function confirmarRecebimento(){
   const v=parseFloat(document.getElementById('receb-val').value)||0;
   if(!v){alert('Digite o valor recebido.');return;}
   S.recebimentos.push({data:todayISO(),valor:v,tipo:'renda'});
+  if(S.saldoReal===null)S.saldoReal=0;
+  S.saldoReal+=v;
+  S.saldoRealData=todayISO();
   if(document.getElementById('receb-disable').checked) S.alertasConfig.recebimento=false;
   save();document.getElementById('mbk-receb').classList.remove('op');
   updKPIs();showToast(`✅ R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})} adicionado ao saldo!`);
