@@ -1032,8 +1032,11 @@ footer{max-width:680px;margin:20px auto 0;padding:0 14px 16px;
   <div class="modal">
     <div class="mhead"><h3>💰 Saldo Real na Conta</h3>
       <button class="bclose" onclick="document.getElementById('mbk-saldo').classList.remove('op')">✕</button></div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6">
-      Informe o valor que você tem na conta agora. O FinTrack vai calcular o saldo real descontando gastos e somando entradas confirmadas.</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">
+      Informe o valor atual da sua conta. A partir daí, o app desconta automaticamente cada gasto que você cadastrar.</p>
+    <div style="background:#fff8e1;border:1.5px solid #F39C12;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#7d5a00;line-height:1.5">
+      📱 <strong>Abra seu banco agora</strong> e olhe o saldo atual — ele já considera tudo que você gastou fora do app (Pix, débito, etc). Digite esse valor aqui.
+    </div>
     <div class="frow s1" style="margin-bottom:13px">
       <div class="fld"><label>Valor atual na conta (R$)</label>
         <input type="number" id="saldo-input" placeholder="ex: 850,00" step="0.01" min="0"></div>
@@ -1467,7 +1470,7 @@ function rendaSemanal(){
   return (S.rendaBaseMensal||0)/4.3;
 }
 function updRendaTot(){
-  const sr = S.saldoReal;
+  const sr=calcSaldoReal();
   const el=document.getElementById('rp-mes');
   if(sr!==null){
     el.textContent=fmtM(sr);
@@ -1936,17 +1939,12 @@ function addGasto(desc,valor,cat,data){
   data=data||document.getElementById('s-data').value||todayISO();
   if(!desc||!valor){alert('Preencha descrição e valor.');return;}
   S.semanaAtual.gastos.push({id:uid(),desc,valor,cat,data});
-  // Desconta do saldo real automaticamente
-  if(S.saldoReal!==null){ S.saldoReal=Math.max(0,S.saldoReal-valor); S.saldoRealData=todayISO(); }
   save();clearF('s-desc','s-val');document.getElementById('s-data').value=todayISO();
   closeModal();renderSemana();updKPIs();
   showToast(`💸 -${fmtM(valor)} descontado do saldo`);
 }
 function delGasto(id){
   if(!confirm('Excluir?'))return;
-  const g=S.semanaAtual.gastos.find(x=>x.id===id);
-  // Devolve ao saldo real
-  if(g&&S.saldoReal!==null){ S.saldoReal+=g.valor; S.saldoRealData=todayISO(); }
   S.semanaAtual.gastos=S.semanaAtual.gastos.filter(g=>g.id!==id);
   save();renderSemana();updKPIs();
 }
@@ -2349,7 +2347,7 @@ function updKPIs(){
   const sg=S.semanaAtual.gastos.reduce((a,g)=>a+g.valor,0);
   const ex=S.extras.reduce((a,e)=>a+e.valor,0);
 
-  // ── DISPONÍVEL = Saldo Real − contas pendentes do mês ──
+  // ── DISPONÍVEL = Saldo Real calculado − contas pendentes do mês ──
   const mesHoje=new Date().getMonth()+1, anoHoje=new Date().getFullYear();
   const fixosPendentes=S.fixos.reduce((a,f)=>{
     if(!f.diaVenc) return a;
@@ -2362,8 +2360,8 @@ function updKPIs(){
     return pago?a:a+p.valor;
   },0);
   const totalPendente=fixosPendentes+parcelasPendentes;
-  const srDisp=S.saldoReal;
-  const disponivel=srDisp!==null ? srDisp-totalPendente : null;
+  const srCalc=calcSaldoReal(); // usa o valor calculado automaticamente
+  const disponivel=srCalc!==null ? srCalc-totalPendente : null;
 
   const se=document.getElementById('k-saldo');
   const kb=document.getElementById('k-badge');
@@ -2371,7 +2369,7 @@ function updKPIs(){
   if(disponivel!==null){
     se.textContent=fmtM(disponivel);
     se.className='kval '+(disponivel>0?'grn':'red');
-    if(explEl) explEl.textContent=`${fmtM(srDisp)} na conta − ${fmtM(totalPendente)} pendente${totalPendente===0?' (tudo em dia!)':''}`;
+    if(explEl) explEl.textContent=`${fmtM(srCalc)} na conta − ${fmtM(totalPendente)} pendente${totalPendente===0?' (tudo em dia!)':''}`;
     if(disponivel<0) kb.innerHTML='<span class="kbadge bg-red">NO VERMELHO 🔴</span>';
     else if(totalPendente>0&&disponivel<totalPendente*0.2) kb.innerHTML='<span class="kbadge bg-yel">APERTADO 🟡</span>';
     else kb.innerHTML='<span class="kbadge bg-grn">NO AZUL 🟢</span>';
@@ -2407,21 +2405,18 @@ function updKPIs(){
   document.getElementById('k-fixos').textContent=fmtM(fx);
   document.getElementById('k-parc').textContent=fmtM(pa);
   document.getElementById('k-var').textContent=fmtM(sg);
-  const sr = S.saldoReal;
+  const sr = calcSaldoReal();
   const srEl=document.getElementById('k-saldo-real');
   const srSub=document.getElementById('k-saldo-real-sub');
   const card=srEl.closest('.saldo-real-card');
   if(sr!==null){
     srEl.textContent=fmtM(sr);
     srEl.className='kval saldo-real-val '+(sr>=0?'grn':'red');
-    srSub.textContent=`Atualizado em ${fmtDate(S.saldoRealData||todayISO())}`;
-    if(card){
-      if(sr<0){card.style.borderColor='rgba(232,99,122,.4)';}
-      else{card.style.borderColor='';}
-    }
+    srSub.textContent=`Base: ${fmtM(S.saldoReal||0)} em ${fmtDate(S.saldoRealData||todayISO())} · atualizado automaticamente`;
+    if(card){ card.style.borderColor=sr<0?'rgba(232,99,122,.4)':''; }
   } else {
     srEl.textContent='—';srEl.className='kval saldo-real-val';
-    srSub.textContent='Toque em "Atualizar" para configurar';
+    srSub.textContent='Toque em "Atualizar" para informar o valor atual da sua conta';
   }
   updRendaTot();updMeta();renderPizza();updSaudeHead();
 }
