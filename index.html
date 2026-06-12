@@ -2144,7 +2144,7 @@ function calcSaldoReal(){
   let saldo=S.saldoReal;
   const dataBase=S.saldoRealData||todayISO();
 
-  // Soma todos os recebimentos confirmados após data base
+  // Soma recebimentos confirmados após data base
   S.recebimentos.forEach(r=>{
     if(r.data&&r.data>=dataBase) saldo+=r.valor;
   });
@@ -2153,13 +2153,16 @@ function calcSaldoReal(){
     if(e.data&&e.data>=dataBase&&e.noSaldo) saldo+=e.valor;
   });
 
-  // Desconta TODOS os gastos variáveis (independente de data)
-  // A lógica é: o saldo base já foi informado pelo usuário olhando o banco
-  // Todos os gastos cadastrados no app são novos a partir daí
-  S.semanaAtual.gastos.forEach(g=>{ saldo-=g.valor; });
-  S.semanasHist.forEach(s=>{ s.gastos.forEach(g=>{ saldo-=g.valor; }); });
+  // Desconta gastos variáveis com data >= dataBase
+  // (gastos anteriores já estavam contabilizados quando você olhou o banco)
+  S.semanaAtual.gastos.forEach(g=>{
+    if(g.data&&g.data>=dataBase) saldo-=g.valor;
+  });
+  S.semanasHist.forEach(s=>{
+    s.gastos.forEach(g=>{ if(g.data&&g.data>=dataBase) saldo-=g.valor; });
+  });
 
-  // Desconta parcelas marcadas como pagas após data base
+  // Desconta parcelas pagas após data base
   S.parcelas.forEach(p=>{
     p.pagas.forEach(pg=>{
       const pgDate=`${pg.ano}-${String(pg.mes).padStart(2,'0')}-01`;
