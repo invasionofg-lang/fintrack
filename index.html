@@ -2915,8 +2915,8 @@ function calcSaude(){
   const rendaMes = rendaSem * 4.3;
 
   // Saldo atual de referência (usa saldo real se disponível, senão projeta)
-  const saldoAtual = S.saldoReal !== null ? S.saldoReal : 0;
-  const temSaldoReal = S.saldoReal !== null;
+  const saldoAtual = calcSaldoReal();
+  const temSaldoReal = saldoAtual !== null;
 
   // Monta lista de contas futuras (ou do mês) ordenadas por dia de vencimento
   const contas = [];
