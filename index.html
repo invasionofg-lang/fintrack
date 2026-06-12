@@ -1988,12 +1988,15 @@ function addGasto(desc,valor,cat,data){
   data=data||document.getElementById('s-data').value||todayISO();
   if(!desc||!valor){alert('Preencha descrição e valor.');return;}
   S.semanaAtual.gastos.push({id:uid(),desc,valor,cat,data,ts:Date.now()});
+  if(S.saldoReal!==null)S.saldoReal-=valor;
   save();clearF('s-desc','s-val');document.getElementById('s-data').value=todayISO();
   closeModal();renderSemana();updKPIs();
   showToast(`💸 -${fmtM(valor)} descontado do saldo`);
 }
 function delGasto(id){
   if(!confirm('Excluir?'))return;
+  const g=S.semanaAtual.gastos.find(x=>x.id===id);
+  if(g&&S.saldoReal!==null)S.saldoReal+=g.valor;
   S.semanaAtual.gastos=S.semanaAtual.gastos.filter(g=>g.id!==id);
   save();renderSemana();updKPIs();
 }
