@@ -2403,20 +2403,36 @@ function updKPIs(){
   }
 
   // ── KPIs de renda e gastos ──
+  // Recebido no mês atual (recebimentos confirmados + extras)
+  const mesHojeR=new Date().getMonth()+1, anoHojeR=new Date().getFullYear();
+  const recebMes=S.recebimentos.filter(r=>{
+    if(!r.data)return false;
+    const[y,m]=r.data.split('-').map(Number);
+    return y===anoHojeR&&m===mesHojeR;
+  }).reduce((a,r)=>a+r.valor,0);
+  const extrasMes=S.extras.filter(e=>{
+    if(!e.data)return false;
+    const[y,m]=e.data.split('-').map(Number);
+    return y===anoHojeR&&m===mesHojeR;
+  }).reduce((a,e)=>a+e.valor,0);
+  const totalRecebMes=recebMes+extrasMes;
+
   if(S.rendaMode==='semanal'){
     const rendaSem=S.rendaBaseSemanal||0;
     const contasSem=contasEstaSemana();
     const saldoSem=Math.max(0,rendaSem-sg-contasSem);
-    document.getElementById('k-renda').textContent=fmtM(rendaSem);
-    document.getElementById('k-renda-sub').textContent=`semana · R$ ${((rendaSem)*4.3).toLocaleString('pt-BR',{minimumFractionDigits:2})}/mês`+(ex>0?` + extras`:'');
+    document.getElementById('k-renda').textContent=totalRecebMes>0?fmtM(totalRecebMes):'—';
+    const nRec=S.recebimentos.filter(r=>{if(!r.data)return false;const[y,m]=r.data.split('-').map(Number);return y===anoHojeR&&m===mesHojeR;}).length;
+    document.getElementById('k-renda-sub').textContent=totalRecebMes>0?`${nRec} recebimento(s) este mês`+(extrasMes>0?` + ${fmtM(extrasMes)} extras`:''):'nenhum recebimento registrado este mês';
     document.getElementById('k-sem').textContent=fmtM(saldoSem);
     document.getElementById('k-sem-lbl').textContent='📅 Livre esta semana';
     document.getElementById('k-dia').textContent=fmtM(Math.max(0,saldoSem/7));
   } else {
     const rendaMes=S.rendaBaseMensal||0;
     const saldoSemEst=Math.max(0,(rendaMes-fx-pa-(sg*4.3))/4.3);
-    document.getElementById('k-renda').textContent=fmtM(rendaMes);
-    document.getElementById('k-renda-sub').textContent=`salário mensal`+(ex>0?` + ${fmtM(ex)} extra`:'');
+    document.getElementById('k-renda').textContent=totalRecebMes>0?fmtM(totalRecebMes):'—';
+    const nRec=S.recebimentos.filter(r=>{if(!r.data)return false;const[y,m]=r.data.split('-').map(Number);return y===anoHojeR&&m===mesHojeR;}).length;
+    document.getElementById('k-renda-sub').textContent=totalRecebMes>0?`${nRec} recebimento(s) este mês`+(extrasMes>0?` + ${fmtM(extrasMes)} extras`:''):'nenhum recebimento registrado este mês';
     document.getElementById('k-sem').textContent=fmtM(saldoSemEst);
     document.getElementById('k-sem-lbl').textContent='📅 Est. livre/semana';
     document.getElementById('k-dia').textContent=fmtM(Math.max(0,saldoSemEst/7));
