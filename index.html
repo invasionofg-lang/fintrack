@@ -2143,26 +2143,31 @@ function calcSaldoReal(){
   if(S.saldoReal===null) return null;
   let saldo=S.saldoReal;
   const dataBase=S.saldoRealData||todayISO();
-  // Soma recebimentos após a data base
+
+  // Soma todos os recebimentos confirmados após data base
   S.recebimentos.forEach(r=>{
-    if(r.data>=dataBase) saldo+=r.valor;
+    if(r.data&&r.data>=dataBase) saldo+=r.valor;
   });
-  // Desconta gastos variáveis após data base
-  S.semanaAtual.gastos.forEach(g=>{
-    if(g.data>=dataBase) saldo-=g.valor;
+  // Soma extras adicionados após data base
+  S.extras.forEach(e=>{
+    if(e.data&&e.data>=dataBase&&e.noSaldo) saldo+=e.valor;
   });
-  S.semanasHist.forEach(s=>{
-    s.gastos.forEach(g=>{if(g.data>=dataBase)saldo-=g.valor;});
-  });
-  // Desconta parcelas pagas após data base
-  const hoje=new Date();
+
+  // Desconta TODOS os gastos variáveis (independente de data)
+  // A lógica é: o saldo base já foi informado pelo usuário olhando o banco
+  // Todos os gastos cadastrados no app são novos a partir daí
+  S.semanaAtual.gastos.forEach(g=>{ saldo-=g.valor; });
+  S.semanasHist.forEach(s=>{ s.gastos.forEach(g=>{ saldo-=g.valor; }); });
+
+  // Desconta parcelas marcadas como pagas após data base
   S.parcelas.forEach(p=>{
     p.pagas.forEach(pg=>{
       const pgDate=`${pg.ano}-${String(pg.mes).padStart(2,'0')}-01`;
       if(pgDate>=dataBase) saldo-=p.valor;
     });
   });
-  // Desconta fixos PIX pagos após data base
+
+  // Desconta fixos pagos após data base
   S.fixosPagos.forEach(fp=>{
     const fpDate=`${fp.ano}-${String(fp.mes).padStart(2,'0')}-01`;
     if(fpDate>=dataBase){
@@ -2170,14 +2175,7 @@ function calcSaldoReal(){
       if(f) saldo-=f.valor;
     }
   });
-  // Desconta faturas de cartão marcadas como pagas após data base
-  S.fixosCartaoPagosMes.forEach(fc=>{
-    const fcDate=`${fc.ano}-${String(fc.mes).padStart(2,'0')}-01`;
-    if(fcDate>=dataBase){
-      const totalCartao=S.fixos.filter(f=>f.tipo==='cartao').reduce((a,f)=>a+f.valor,0);
-      saldo-=totalCartao;
-    }
-  });
+
   return saldo;
 }
 function openSaldoModal(){
@@ -3321,7 +3319,7 @@ function esc(s){return String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;
 function fmtM(n){return'R$ '+(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtDate(iso){if(!iso)return'';const[y,m,d]=iso.split('-');return`${d}/${m}/${y}`;}
 function fmtDT(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
-function todayISO(){return new Date().toISOString().slice(0,10);}
+function todayISO(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function semaIni(date,dia){const d=new Date(date);let diff=d.getDay()-dia;if(diff<0)diff+=7;d.setDate(d.getDate()-diff);return d.toISOString().slice(0,10);}
 function addDays(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
 function clearF(...ids){ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
