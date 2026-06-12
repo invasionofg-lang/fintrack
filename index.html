@@ -2193,37 +2193,41 @@ function calcSaldoReal(){
 
 function calcSaldoReal(){
   if(S.saldoReal===null) return null;
+  // Se não tem timestamp de reset, mostra o valor bruto sem descontos
+  // (usuário ainda não atualizou com o novo sistema)
+  if(!S.saldoRealTs) return S.saldoReal;
+
   let saldo=S.saldoReal;
-  const tsBase = S.saldoRealTs || 0; // timestamp exato do reset (0 = nunca resetou)
+  const tsBase = S.saldoRealTs;
 
   // Gastos variáveis — só desconta se criado APÓS o reset
   S.semanaAtual.gastos.forEach(g=>{
-    if((g.ts||0) > tsBase) saldo -= g.valor;
+    if(g.ts && g.ts > tsBase) saldo -= g.valor;
   });
   S.semanasHist.forEach(s=>{
-    s.gastos.forEach(g=>{ if((g.ts||0) > tsBase) saldo -= g.valor; });
+    s.gastos.forEach(g=>{ if(g.ts && g.ts > tsBase) saldo -= g.valor; });
   });
 
   // Recebimentos confirmados após reset
   S.recebimentos.forEach(r=>{
-    if((r.ts||0) > tsBase) saldo += r.valor;
+    if(r.ts && r.ts > tsBase) saldo += r.valor;
   });
 
   // Extras adicionados após reset
   S.extras.forEach(e=>{
-    if((e.ts||0) > tsBase && e.noSaldo) saldo += e.valor;
+    if(e.ts && e.ts > tsBase && e.noSaldo) saldo += e.valor;
   });
 
   // Parcelas pagas após reset
   S.parcelas.forEach(p=>{
     p.pagas.forEach(pg=>{
-      if((pg.ts||0) > tsBase) saldo -= p.valor;
+      if(pg.ts && pg.ts > tsBase) saldo -= p.valor;
     });
   });
 
   // Fixos pagos após reset
   S.fixosPagos.forEach(fp=>{
-    if((fp.ts||0) > tsBase){
+    if(fp.ts && fp.ts > tsBase){
       const f=S.fixos.find(x=>x.id===fp.id);
       if(f) saldo -= f.valor;
     }
